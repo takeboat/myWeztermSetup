@@ -1,0 +1,162 @@
+local wezterm = require 'wezterm'
+
+local config = wezterm.config_builder()
+-- 检测操作系统
+local is_windows = wezterm.target_triple == "x86_64-pc-windows-msvc"
+local is_mac = wezterm.target_triple:find("darwin") ~= nil
+
+-- shell配置
+if is_windows then
+    -- Windows 平台
+    config.default_prog = { "powershell.exe", "-NoLogo" }
+    config.exit_behavior = "Hold"
+elseif wezterm.target_triple == "x86_64-unknown-linux-gnu" then
+    -- Linux 平台
+    config.default_prog = { "/bin/zsh" }
+elseif is_mac then
+    -- macOS 平台
+    config.default_prog = { "/opt/homebrew/bin/zsh" }
+end
+
+-- 外观配置
+config.color_scheme = "GruvboxDarkHard" -- 内置配色方案
+config.font = wezterm.font_with_fallback({
+    "Maple Mono NF CN",                 -- 您当前的字体
+    "FiraCode Nerd Font",               -- 广泛支持的 Nerd Font
+}, { weight = "Regular" })
+config.font_size = 12
+config.window_background_opacity = 0.95 -- 透明度 (0-1)
+
+-- 窗口配置
+config.initial_rows = 30
+config.initial_cols = 140
+config.use_fancy_tab_bar = false
+config.window_decorations = "RESIZE" -- 替代 window_borderless
+config.hide_tab_bar_if_only_one_tab = true
+config.enable_tab_bar = true
+config.tab_bar_at_bottom = true
+-- 键位绑定
+local act = wezterm.action
+config.keys = {
+    -- 直接使用 Ctrl 加方向键
+    { key = "h",     mods = "CTRL",       action = act.ActivatePaneDirection("Left") },
+    { key = "j",     mods = "CTRL",       action = act.ActivatePaneDirection("Down") },
+    { key = "k",     mods = "CTRL",       action = act.ActivatePaneDirection("Up") },
+    { key = "l",     mods = "CTRL",       action = act.ActivatePaneDirection("Right") },
+
+    -- 分割窗口
+    { key = "v",     mods = "ALT",        action = act.SplitVertical },  -- 垂直分割
+    { key = "s",     mods = "ALT",        action = act.SplitHorizontal }, -- 水平分割
+
+    -- 解决 Ctrl+H 冲突（禁用默认的删除功能）
+    { key = "h",     mods = "CTRL|SHIFT", action = act.SendString("\x08") }, -- 保留删除功能
+    { key = "q",     mods = "ALT",        action = act.CloseCurrentPane({ confirm = false }) },
+
+    -- 新建标签
+    { key = "t",     mods = "ALT",        action = act.SpawnTab("CurrentPaneDomain") },
+    { key = "h",     mods = "ALT",        action = act.ActivateTabRelative(-1) }, -- Alt+h → 上一个 Tab
+    { key = "l",     mods = "ALT",        action = act.ActivateTabRelative(1) },  -- Alt+l → 下一个 Tab
+    { key = "z",     mods = "ALT",        action = act.TogglePaneZoomState },     -- Alt+z 放大/恢复窗格
+
+    -- 全屏
+    { key = "Enter", mods = "CTRL",       action = act.ToggleFullScreen },
+    {
+        key = "c",
+        mods = "CTRL",
+        action = wezterm.action_callback(function(window, pane)
+            local selection_text = window:get_selection_text_for_pane(pane)
+            if selection_text ~= "" then
+                -- 有选择文本时执行复制
+                window:perform_action(act.CopyTo("Clipboard"), pane)
+                window:perform_action(act.ClearSelection, pane)
+            else
+                -- 没有选择文本时发送原始 Ctrl+C（中断信号）
+                window:perform_action(act.SendKey { key = "c", mods = "CTRL" }, pane)
+            end
+        end)
+    },
+
+    -- 智能 Ctrl+V：粘贴文本或执行其他操作
+    {
+        key = "v",
+        mods = "CTRL",
+        action = wezterm.action_callback(function(window, pane)
+            -- 有选择文本时执行复制模式（代替粘贴）
+            local selection_text = window:get_selection_text_for_pane(pane)
+            if selection_text ~= "" then
+                return
+            end
+
+            -- 没有选择文本时尝试粘贴
+            window:perform_action(act.PasteFrom("Clipboard"), pane)
+        end)
+    }
+}
+
+for i, key in ipairs({
+    { key = "v", mods = "CTRL|SHIFT", action = act.PasteFrom("Clipboard") } -- 备用粘贴快捷键
+}) do
+    table.insert(config.keys, key)
+end
+
+-- 复制粘贴键位（平台特定）
+if is_windows or not is_mac then
+    -- Windows 和 Linux 使用 Ctrl+Shift+C/V
+    config.keys[#config.keys + 1] = { key = "c", mods = "CTRL|SHIFT", action = act.CopyTo 'Clipboard' }
+    config.keys[#config.keys + 1] = { key = "v", mods = "CTRL|SHIFT", action = act.PasteFrom 'Clipboard' }
+else
+    -- macOS 使用 Command+C/V
+    config.keys[#config.keys + 1] = { key = "c", mods = "SUPER", action = act.CopyTo 'Clipboard' }
+    config.keys[#config.keys + 1] = { key = "v", mods = "SUPER", action = act.PasteFrom 'Clipboard' }
+end
+
+-- 修复的鼠标绑定配置
+config.mouse_bindings = {
+    -- 双击选词（仅左键使用 streak 参数）
+    {
+        event = { Down = { streak = 2, button = "Left" } },
+        action = act.SelectTextAtMouseCursor("Word"),
+    }
+}
+config.set_environment_variables = {
+    LC_ALL = "en_US.UTF-8",
+    LANG = "en_US.UTF-8",
+    LC_CTYPE = "zh_CN.UTF-8",
+}
+
+-- 右键粘贴（无需 streak 参数）
+if is_windows then
+    -- Windows 右键直接粘贴
+    config.mouse_bindings[#config.mouse_bindings + 1] = {
+        event = { Down = { streak = 2, button = "Right" } },
+        mods = "NONE",
+        action = act.PasteFrom("Clipboard"),
+    }
+elseif is_mac then
+    -- macOS 用 Command+右键粘贴
+    config.mouse_bindings[#config.mouse_bindings + 1] = {
+        event = { Down = { streak = 1, button = "Right" } },
+        mods = "SUPER",
+        action = act.PasteFrom("Clipboard"),
+    }
+else
+    -- Linux 用 Ctrl+Shift+右键粘贴
+    config.mouse_bindings[#config.mouse_bindings + 1] = {
+        event = { Down = { streak = 1, button = "Right" } },
+        mods = "CTRL|SHIFT",
+        action = act.PasteFrom("Clipboard"),
+    }
+end
+
+-- macOS 特殊设置
+if is_mac then
+    config.use_ime = true -- 输入法支持
+    config.send_composed_key_when_left_alt_is_pressed = true
+    config.send_composed_key_when_right_alt_is_pressed = false
+end
+
+-- 通用设置
+config.scrollback_lines = 10000
+config.enable_scroll_bar = true
+
+return config
