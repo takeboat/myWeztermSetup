@@ -18,24 +18,29 @@ elseif is_mac then
     config.default_prog = { "/opt/homebrew/bin/zsh" }
 end
 
--- 外观配置
-config.color_scheme = "GruvboxDarkHard" -- 内置配色方案
-config.font = wezterm.font_with_fallback({
-    "Maple Mono NF CN",                 -- 您当前的字体
-    "FiraCode Nerd Font",               -- 广泛支持的 Nerd Font
-}, { weight = "Regular" })
-config.font_size = 12
-config.window_background_opacity = 0.95 -- 透明度 (0-1)
+-- max fps
+config.max_fps = 240
+config.animation_fps = 240
 
+-- 外观配置
+config.font = wezterm.font_with_fallback({
+    "Annotation Mono", -- 广泛支持的 Nerd Font
+    "Maple Mono NF CN",
+}, { weight = "Regular" })
+config.font_size = 14
+config.color_scheme = 'Gruber (base16)'
+-- config.win32_system_backdrop = 'Acrylic'
+config.force_reverse_video_cursor = true
 -- 窗口配置
-config.initial_rows = 30
-config.initial_cols = 140
 config.use_fancy_tab_bar = false
 config.window_decorations = "RESIZE" -- 替代 window_borderless
 config.hide_tab_bar_if_only_one_tab = true
 config.enable_tab_bar = true
 config.tab_bar_at_bottom = true
 
+config.default_cursor_style = 'SteadyBar' -- 光标设置为line
+config.window_background_opacity = 0.95
+config.enable_scroll_bar = true
 -- 键位绑定
 local act = wezterm.action
 
@@ -49,6 +54,7 @@ config.keys = {
 
     -- 分割窗口
     { key = "v",     mods = "ALT",        action = act.SplitVertical },  -- 垂直分割
+    { key = "v",     mods = "ALT",        action = act.SplitVertical },   -- 垂直分割
     { key = "s",     mods = "ALT",        action = act.SplitHorizontal }, -- 水平分割
 
     -- 解决 Ctrl+H 冲突
@@ -66,15 +72,15 @@ config.keys = {
     
     -- 智能 Ctrl+C：优先复制选中文本，没有选中时发送中断信号
     {
-        key = "c", 
-        mods = "CTRL", 
+        key = "c",
+        mods = "CTRL",
         action = wezterm.action_callback(function(window, pane)
             -- 清除任何选中的文本（准备接收新输入）
             window:perform_action(act.ClearSelection, pane)
-            
+
             -- 获取当前是否有选中文本
             local has_selection = window:get_selection_text_for_pane(pane) ~= ""
-            
+
             if has_selection then
                 -- 如果有选中文本，执行复制
                 window:perform_action(act.CopyTo("Clipboard"), pane)
@@ -93,11 +99,11 @@ config.keys = {
             -- 清除任何选中的文本
             window:perform_action(act.ClearSelection, pane)
             
-            -- 直接粘贴但不立即执行
-            window:perform_action(act.PasteFrom("Clipboard"), pane)
+                window:perform_action(act.SendKey { key = "c", mods = "CTRL" }, pane)
+            end
         end)
     },
-    
+
     -- 备用粘贴（安全粘贴）
     { key = "v", mods = "CTRL|SHIFT", action = act.PasteFrom("Clipboard") }
 }
@@ -111,13 +117,6 @@ else
     config.keys[#config.keys + 1] = { key = "c", mods = "SUPER", action = act.CopyTo 'Clipboard' }
 end
 
--- 添加额外的 Ctrl+C 作为可靠的中断信号源
-config.keys[#config.keys + 1] = {
-    key = "c", mods = "CTRL|SHIFT", 
-    action = act.SendKey{ key = "c", mods = "CTRL" }
-}
-
--- 修复的鼠标绑定配置
 config.mouse_bindings = {
     -- 双击选词
     {
@@ -131,9 +130,6 @@ config.set_environment_variables = {
     LC_CTYPE = "zh_CN.UTF-8",
 }
 
--- 右键粘贴（保持不变）
--- ...（保持原来的右键粘贴代码不变）
-
 -- macOS 特殊设置（保持不变）
 if is_mac then
     config.use_ime = true
@@ -146,3 +142,4 @@ config.scrollback_lines = 10000
 config.enable_scroll_bar = true
 
 return config
+
